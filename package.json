@@ -1,0 +1,12 @@
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "description": "My Node.js application",
+  "main": "splitImage.js",
+  "bin": "splitImage.js",
+  "dependencies": {
+    "axios": "0.27.2",
+    "sharp": "^0.32.4",
+    "xlsx": "^0.18.5"
+  }
+}
