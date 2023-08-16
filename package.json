@@ -4,6 +4,10 @@
   "description": "My Node.js application",
   "main": "splitImage.js",
   "bin": "splitImage.js",
+  "pkg": {
+    "targets": [ "node18-win-x64" ],
+    "outputPath": "dist"
+  },
   "dependencies": {
     "axios": "0.27.2",
     "sharp": "^0.32.4",

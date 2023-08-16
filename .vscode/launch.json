@@ -11,6 +11,7 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
+            "cwd": "${workspaceFolder}\\dist",
             "program": "${workspaceFolder}\\splitImage.js"
         }
     ]

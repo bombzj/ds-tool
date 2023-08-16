@@ -1,2 +1,4 @@
 *.xlsx
+.vscode
 node_modules
+dist

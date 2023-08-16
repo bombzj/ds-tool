@@ -93,11 +93,11 @@ files.forEach(async file => {
                         serial = 1
                     }
                     codeMap.set(code, serial)
-                    const outputFile = `${code}-${serial}.png`
+                    const outputFile = path.join(outputFolderPath, `${code}-${serial}.png`)
                     if (!fs.existsSync(outputFile)) {
                         const width = bound.right - bound.left// Math.floor(metadata.width / 5)
                         await sharp(imageBuffer).extract({ left: bound.left, top: 0, width, height: metadata.height })
-                            .toFile(path.join(outputFolderPath, outputFile));
+                            .toFile(outputFile);
                     }
                 }
             }
