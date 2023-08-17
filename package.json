@@ -1,15 +1,26 @@
 {
-  "name": "my-app",
-  "version": "1.0.0",
-  "description": "My Node.js application",
+  "name": "ZestImg",
+  "version": "0.3",
+  "description": "xls split png",
+  "copyright": "Copyright ©Zest 2023",
   "main": "splitImage.js",
   "bin": "splitImage.js",
   "pkg": {
-    "targets": [ "node18-win-x64" ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "assets": [
+      "node_modules/sharp/build/Release/**/*"
+    ],
     "outputPath": "dist"
+  },
+  "scripts": {
+    "pkg": "pkg . --output dist/ZestImg.exe --compress GZip"
   },
   "dependencies": {
     "axios": "0.27.2",
+    "progress": "^2.0.3",
+    "rcedit": "^3.1.0",
     "sharp": "^0.32.4",
     "xlsx": "^0.18.5"
   }
