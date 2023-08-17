@@ -41,9 +41,9 @@ async function main() {
             const codeMap = new Map()
             const codeMap2 = new Map()  // 原始图片
 
-            for (let i = 1; i < rows.length; i++) {
+            for (let i = 0; i < rows.length; i++) {
                 const [skuName, sku, code, imageUrl] = rows[i];
-                //   const serialNumbers = [0, 1, 2, 3, 4];
+                if (imageUrl === undefined || !imageUrl.startsWith("http")) continue
                 let n = 1;
                 const regex = /-(\d+)P$/;
                 const match = sku.match(regex);
@@ -59,6 +59,45 @@ async function main() {
                 }
                 codeMap2.set(code, serial2)
                 const oriFile = path.join(outputFolderOriginal, `${code}-${serial2}.png`)  // 原始图保存文件
+
+                const downloadImage = async (url, retry = 5) => {
+                    for (let i = 0; i < retry; i++) {
+                        var bar = new ProgressBar(`${i == 0 ? "正在下载" : "重试下载"}：${code} [:bar] :result`, { total: 30 });
+                        bar.update(0, { result: "" })
+                        const response = await axios.get(url, { responseType: 'stream' }).catch(e => { })
+                        if (!response) {
+                            bar.render({ result: "失败" })
+                            bar.terminate()
+                            continue
+                        }
+                        const totalSize = parseInt(response.headers['content-length'], 10);
+                        let downloadedSize = 0;
+                        const dataBuffer = [];
+                        let progress = 0
+                        response.data.on('data', chunk => {
+                            downloadedSize += chunk.length;
+                            dataBuffer.push(chunk);
+                            const updateProgress = Math.floor(downloadedSize * 30 / totalSize)
+                            if (updateProgress > progress) {
+                                if(updateProgress < 30)
+                                    bar.tick(updateProgress - progress)
+                                progress = updateProgress
+                            }
+                        });
+                        await new Promise((resolve) => {
+                            response.data.on('end', resolve);
+                            response.data.on('error', resolve);
+                        })
+                        if (dataBuffer.length != 0) {
+                            bar.update(1, { result: "成功" })
+                            return Buffer.concat(dataBuffer, downloadedSize);
+                        } else {
+                            bar.render({ result: "失败" })
+                            bar.terminate()
+                        }
+                    }
+                }
+
 
                 const splitImage = async (data, cached = false) => {
                     const imageBuffer = data;
@@ -128,36 +167,13 @@ async function main() {
                     console.log("从缓存读取：" + code)
                     await splitImage(fs.readFileSync(oriFile), true)
                 } else {
-                    // console.log("正在下载：" + code)
-                    var bar = new ProgressBar(`正在下载：${code} :bar`, { total: 30 });
-                    const response = await axios.get(imageUrl, { responseType: 'stream' })
-                    const totalSize = parseInt(response.headers['content-length'], 10);
-                    let downloadedSize = 0;
-                    const dataBuffer = [];
-                    let progress = 0
-                    response.data.on('data', chunk => {
-                        downloadedSize += chunk.length;
-                        dataBuffer.push(chunk);
-
-                        if (downloadedSize * 30 / totalSize > progress) {
-                            bar.tick()
-                            progress++
-                        }
-                    });
-                    await new Promise((resolve, reject) => {
-                        response.data.on('end', resolve);
-                        response.data.on('error', reject);
-                    })
-                    //   console.log('Download completed!');
-                    const data = Buffer.concat(dataBuffer, downloadedSize);
+                    const data = await downloadImage(imageUrl)
                     if (lastSplitTask) {    // make sure last split task finished
                         await lastSplitTask
+                        lastSplitTask = undefined
                     }
-                    lastSplitTask = splitImage(data)    // split and continue to download next
-                    // return splitImage(response.data)
-                    // .catch(error => {
-                    //     console.error(`${code} 下载失败:`, error);
-                    // });
+                    if (data)
+                        lastSplitTask = splitImage(data)    // split and continue to download next
                 }
             }
             console.log(`${file} 处理完毕`)
@@ -197,6 +213,11 @@ async function main() {
     if (!fs.existsSync(orderListFolder)) {
         fs.mkdirSync(orderListFolder);
     }
-    xlsx.writeFile(workbook, path.join(orderListFolder, `${year}-${month}-${day}.xlsx`));
-    console.log(`列表t.xlsx已生成`)
+    const xlsFile = `${year}-${month}-${day}.xlsx`
+    try {
+        xlsx.writeFile(workbook, path.join(orderListFolder, xlsFile));
+        console.log(`列表${xlsFile}已生成`)
+    } catch(e){
+        console.log(`列表${xlsFile}无法覆盖，文件正在使用中`)
+    }
 }
