@@ -1,8 +1,8 @@
 {
-  "name": "ZestImg",
-  "version": "0.3",
+  "name": "zestimage",
+  "version": "0.4",
   "description": "xls split png",
-  "copyright": "Copyright ©Zest 2023",
+  "copyright": "Copyright ©Zesty 2023",
   "main": "splitImage.js",
   "bin": "splitImage.js",
   "pkg": {
@@ -15,7 +15,7 @@
     "outputPath": "dist"
   },
   "scripts": {
-    "pkg": "pkg . --output dist/ZestImg.exe --compress GZip"
+    "pkg": "pkg . --output dist/ZestImage.exe --compress GZip"
   },
   "dependencies": {
     "axios": "0.27.2",
