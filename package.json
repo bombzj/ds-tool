@@ -10,7 +10,8 @@
       "node18-win-x64"
     ],
     "assets": [
-      "node_modules/sharp/build/Release/**/*"
+      "node_modules/sharp/build/Release/**/*",
+      "node_modules/@jimp/plugin-print/fonts/**/*"
     ],
     "outputPath": "dist"
   },
@@ -19,6 +20,8 @@
   },
   "dependencies": {
     "axios": "0.27.2",
+    "bwip-js": "^4.0.0",
+    "jimp": "^0.22.10",
     "progress": "^2.0.3",
     "rcedit": "^3.1.0",
     "sharp": "^0.32.4",

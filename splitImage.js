@@ -2,8 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
 const axios = require('axios');
+const BWIP = require('bwip-js');
 const sharp = require('sharp'); // For image manipulation
 const ProgressBar = require('progress');
+const Jimp = require('jimp');
 
 const inputFolderPath = './';
 
@@ -13,9 +15,15 @@ setTimeout(() => {
     console.log(code)
 }, 999999999);
 
-main()
+const currentDate = new Date();
+const year = currentDate.getFullYear();
+const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+const day = String(currentDate.getDate()).padStart(2, '0');
+let font, font2
 
 async function main() {
+    font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK)
+    font2 = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK)
     const orderList = []
     let lastSplitTask
     for (let file of files) {
@@ -42,7 +50,7 @@ async function main() {
             const codeMap2 = new Map()  // 原始图片
 
             for (let i = 0; i < rows.length; i++) {
-                const [skuName, sku, code, imageUrl] = rows[i];
+                const [orderNumber, sku, code, imageUrl] = rows[i];
                 if (imageUrl === undefined || !imageUrl.startsWith("http")) continue
                 let n = 1;
                 const regex = /-(\d+)P$/;
@@ -53,12 +61,15 @@ async function main() {
 
                 let serial2 = codeMap2.get(code)
                 if (serial2) {
-                    serial2++
+                    serial2.number++
                 } else {
-                    serial2 = 1
+                    serial2 = {
+                        number: 1,
+                        orderNumber, sku, code
+                    }
+                    codeMap2.set(code, serial2)
                 }
-                codeMap2.set(code, serial2)
-                const oriFile = path.join(outputFolderOriginal, `${code}-${serial2}.png`)  // 原始图保存文件
+                const oriFile = path.join(outputFolderOriginal, `${code}-${serial2.number}.png`)  // 原始图保存文件
 
                 const downloadImage = async (url, retry = 5) => {
                     for (let i = 0; i < retry; i++) {
@@ -79,7 +90,7 @@ async function main() {
                             dataBuffer.push(chunk);
                             const updateProgress = Math.floor(downloadedSize * 30 / totalSize)
                             if (updateProgress > progress) {
-                                if(updateProgress < 30)
+                                if (updateProgress < 30)
                                     bar.tick(updateProgress - progress)
                                 progress = updateProgress
                             }
@@ -154,7 +165,7 @@ async function main() {
                                 .toFile(outputFile);
                         }
                         const orderDetail = [
-                            code, skuName, , 5004
+                            code, orderNumber, , 5004
                         ]
                         orderDetail[7] = "条"
                         orderDetail[16] = splitCode
@@ -176,21 +187,23 @@ async function main() {
                         lastSplitTask = splitImage(data)    // split and continue to download next
                 }
             }
+            for (let order of codeMap2.values()) {
+                generateBarcode(order.code, [order.orderNumber, `Total: ${order.number} pcs`, currentDate.toLocaleString()], path.join(outputFolderPath, `条码${order.code}.png`))
+            }
             console.log(`${file} 处理完毕`)
         }
     }
     if (lastSplitTask) {
         await lastSplitTask
     }
+    if(orderList.length == 0) {
+        console.log("没有找到xlsx文件")
+        return
+    }
     const rowData = [
         "货品名称", "货品英文名称", "货品编号", "分类编号", "分类名称", "别名", "品牌", "单位", "辅助单位1", "转换率1", "辅助单位2", "转换率2", "辅助单位3", "转换率3", "常用单位", "规格", "条码", "长(cm)", "宽(cm)", "高(cm)", "体积", "体积单位", "重量单位", "重量", "固定成本价", "货品类型", "批次管理", "序列号管理", "生产物料", "定制生产", "提货卡券", "有偿服务", "需上门安装", "管理保质期", "保质期", "保质期单位", "货品标记", "规格标记", "备注", "货品说明", "在库生产", "序号", "规格备注", "自定义字段1", "自定义字段2", "规格编号", "颜色", "尺码", "成分", "文本", "测试日期01", "主条码", "默认供应商", "货主"
     ];
 
-
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const day = String(currentDate.getDate()).padStart(2, '0');
 
     for (let i = 0; i < orderList.length; i++) {
         const row = orderList[i]
@@ -217,7 +230,69 @@ async function main() {
     try {
         xlsx.writeFile(workbook, path.join(orderListFolder, xlsFile));
         console.log(`列表${xlsFile}已生成`)
-    } catch(e){
+    } catch (e) {
         console.log(`列表${xlsFile}无法覆盖，文件正在使用中`)
     }
+
 }
+
+
+
+function generateBarcode(code, messages, filename) {
+    const barcodeOptions = {
+        bcid: 'code128', // Barcode type
+        text: code, // Text to encode
+        scale: 4, // Barcode scaling factor
+        height: 20, // Barcode height, in pixels
+        includetext: true, // Show human-readable text below the barcode
+    };
+
+    // Create the barcode image
+    BWIP.toBuffer(barcodeOptions, (err, png) => {
+        if (err) throw err;
+
+        // Load the barcode image
+        Jimp.read(png)
+            .then(barcodeImage => {
+                // Resize the barcode image to fit within the canvas
+                // barcodeImage.resize(600, 120);
+
+                // Create a blank canvas with size 800x800
+                new Jimp(800, 800, "#FFFFFF", (backgroundColorErr, canvas) => {
+                    if (backgroundColorErr) throw backgroundColorErr;
+
+                    // Merge the barcode image with the canvas by placing it in the center
+                    const x = (canvas.bitmap.width - barcodeImage.bitmap.width) / 2;
+                    const y = (canvas.bitmap.height - barcodeImage.bitmap.height) / 3;
+
+                    canvas.composite(barcodeImage, x, y);
+
+                    // Add the number "15" at the bottom of the canvas
+
+                    canvas.print(font, 100, 500, messages[0]);
+                    canvas.print(font, 100, 580, messages[1]);
+                    canvas.print(font2, 100, 660, messages[2]);
+
+                    // Save the final image as a PNG file
+                    canvas.write(filename, (saveErr) => {
+                        if (saveErr) console.log("条码生成出错: " + code);
+                    });
+                });
+            })
+            .catch(barcodeImageErr => {
+                console.error(barcodeImageErr);
+            });
+    });
+
+
+
+}
+
+process.on('uncaughtException', UncaughtExceptionHandler);
+
+function UncaughtExceptionHandler(err) {
+    console.log("err: ", err);
+    console.log("Stack trace: ", err.stack);
+}
+
+main()
