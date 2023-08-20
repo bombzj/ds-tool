@@ -46,8 +46,7 @@ async function main() {
                 fs.mkdirSync(outputFolderOriginal);
             }
 
-            const codeMap = new Map()
-            const codeMap2 = new Map()  // 原始图片
+            const orderMap = new Map()  // 原始图片
 
             for (let i = 0; i < rows.length; i++) {
                 const [orderNumber, sku, code, imageUrl] = rows[i];
@@ -59,17 +58,18 @@ async function main() {
                     n = parseInt(match[1])
                 }
 
-                let serial2 = codeMap2.get(code)
-                if (serial2) {
-                    serial2.number++
+                let orderData = orderMap.get(code)
+                if (orderData) {
+                    orderData.number++
                 } else {
-                    serial2 = {
+                    orderData = {
                         number: 1,
+                        piece: 0,
                         orderNumber, sku, code
                     }
-                    codeMap2.set(code, serial2)
+                    orderMap.set(code, orderData)
                 }
-                const oriFile = path.join(outputFolderOriginal, `${code}-${serial2.number}.png`)  // 原始图保存文件
+                const oriFile = path.join(outputFolderOriginal, `${code}-${orderData.number}.png`)  // 原始图保存文件
 
                 const downloadImage = async (url, retry = 5) => {
                     for (let i = 0; i < retry; i++) {
@@ -150,14 +150,10 @@ async function main() {
                     for (let i = 0; i < boundingList.length; i++) {
                         let bound = boundingList[i]
                         if (i >= n) return
-                        let serial = codeMap.get(code)
-                        if (serial) {
-                            serial++
-                        } else {
-                            serial = 1
-                        }
-                        codeMap.set(code, serial)
-                        const splitCode = `${code}-${serial}`
+
+                        orderData.piece++
+
+                        const splitCode = `${code}-${orderData.piece}`
                         const outputFile = path.join(outputFolderPath, `${splitCode}.png`)
                         if (!fs.existsSync(outputFile)) {
                             const width = bound.right - bound.left// Math.floor(metadata.width / 5)
@@ -176,25 +172,30 @@ async function main() {
 
                 if (fs.existsSync(oriFile)) {
                     console.log("从缓存读取：" + code)
+                    console.log(`开始切分图片 ${sku}`)
                     await splitImage(fs.readFileSync(oriFile), true)
                 } else {
                     const data = await downloadImage(imageUrl)
-                    if (lastSplitTask) {    // make sure last split task finished
-                        await lastSplitTask
-                        lastSplitTask = undefined
+                    // if (lastSplitTask) {    // make sure last split task finished
+                    //     await lastSplitTask
+                    //     lastSplitTask = undefined
+                    // }
+                    if (data) {
+                        console.log(`开始切分图片 ${sku}`)
+                        await splitImage(data)
                     }
-                    if (data)
-                        lastSplitTask = splitImage(data)    // split and continue to download next
+                        // lastSplitTask = splitImage(data)    // split and continue to download next
                 }
             }
-            for (let order of codeMap2.values()) {
-                generateBarcode(order.code, [order.orderNumber, `Total: ${order.number} pcs`, currentDate.toLocaleString()], path.join(outputFolderPath, `条码${order.code}.png`))
+            // if (lastSplitTask) {
+            //     await lastSplitTask
+            //     lastSplitTask = undefined
+            // }
+            console.log(`开始生成条码 ${file}`)
+            for (let order of orderMap.values()) {
+                generateBarcode(order.code, [order.orderNumber, `Total: ${order.piece} pcs`, currentDate.toLocaleString()], path.join(outputFolderPath, `条码${order.code}.png`))
             }
-            console.log(`${file} 处理完毕`)
         }
-    }
-    if (lastSplitTask) {
-        await lastSplitTask
     }
     if(orderList.length == 0) {
         console.log("没有找到xlsx文件")
@@ -229,7 +230,7 @@ async function main() {
     const xlsFile = `${year}-${month}-${day}.xlsx`
     try {
         xlsx.writeFile(workbook, path.join(orderListFolder, xlsFile));
-        console.log(`列表${xlsFile}已生成`)
+        console.log(`列表已生成 ${xlsFile}`)
     } catch (e) {
         console.log(`列表${xlsFile}无法覆盖，文件正在使用中`)
     }
