@@ -115,10 +115,14 @@ async function main() {
                     if (!cached)
                         fs.writeFileSync(oriFile, imageBuffer);
                     const imageSharp = sharp(imageBuffer)
-
-                    const info = await imageSharp
+                    let info
+                    try {
+                        info = await imageSharp
                         .raw()
                         .toBuffer({ resolveWithObject: true });
+                    } catch(e) {
+                        return -2
+                    }
                     const metadata = info.info
 
                     const pixelArray = new Uint8ClampedArray(info.data.buffer);
@@ -126,8 +130,9 @@ async function main() {
                     let bounding = {
                         left: -1
                     }
+                    const baseline = (metadata.width * Math.floor(metadata.height / 2)) << 2
                     for (let i = 0; i < metadata.width; i++) {
-                        let transparent = pixelArray[i * 4 + 3] == 0
+                        let transparent = pixelArray[baseline + i * 4 + 3] == 0
                         if (bounding.left == -1) {
                             if (!transparent) {
                                 bounding.left = i
@@ -146,10 +151,13 @@ async function main() {
                         bounding.right = metadata.width
                         boundingList.push(bounding)
                     }
+                    if(boundingList.length != n){
+                        console.log(`识别到${boundingList.length}个图片，与订单要求的${n}不一致`)
+                    }
 
                     for (let i = 0; i < boundingList.length; i++) {
                         let bound = boundingList[i]
-                        if (i >= n) return
+                        if (i >= n) break
 
                         orderData.piece++
 
@@ -168,13 +176,19 @@ async function main() {
                         orderDetail[28] = "是"
                         orderList.push(orderDetail)
                     }
+                    return 1
                 }
 
+                let result = 0
                 if (fs.existsSync(oriFile)) {
                     console.log("从缓存读取：" + code)
                     console.log(`开始切分图片 ${sku}`)
-                    await splitImage(fs.readFileSync(oriFile), true)
-                } else {
+                    result = await splitImage(fs.readFileSync(oriFile), true)
+                    if(result == -2) {
+                        console.log("图片已损坏，重新开始下载")
+                    }
+                }
+                if(result != 1) {
                     const data = await downloadImage(imageUrl)
                     // if (lastSplitTask) {    // make sure last split task finished
                     //     await lastSplitTask
@@ -182,7 +196,10 @@ async function main() {
                     // }
                     if (data) {
                         console.log(`开始切分图片 ${sku}`)
-                        await splitImage(data)
+                        result = await splitImage(data)
+                        if(result == -2) {
+                            console.log("下载的图片已损坏")
+                        }
                     }
                         // lastSplitTask = splitImage(data)    // split and continue to download next
                 }
