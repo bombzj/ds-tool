@@ -6,6 +6,32 @@ const BWIP = require('bwip-js');
 const sharp = require('sharp'); // For image manipulation
 const ProgressBar = require('progress');
 const Jimp = require('jimp');
+const { PDFDocument } = require('pdf-lib');
+
+let startTaskNumber = 8001
+let currentTaskNumber = startTaskNumber
+
+
+async function createBarcodePDF(barcodeImagePath, outputFilePath) {
+    const image = await Jimp.read(barcodeImagePath);
+    const imageBuffer = await image.getBufferAsync(Jimp.MIME_PNG);
+
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage();
+    const imageEmbed = await pdfDoc.embedPng(imageBuffer);
+    const { width, height } = image.bitmap;
+    page.setSize(width, height)
+
+    page.drawImage(imageEmbed, {
+        x: 0,
+        y: 0,
+        width,
+        height,
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    fs.writeFileSync(outputFilePath, pdfBytes);
+}
 
 const inputFolderPath = './';
 
@@ -32,6 +58,11 @@ async function main() {
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             const rows = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+
+            let basefilename = path.basename(file, '.xlsx')
+            let splitfilename = basefilename.indexOf("--")
+            if(splitfilename != -1)
+                currentTaskNumber = startTaskNumber = parseInt(basefilename.substring(splitfilename + 2))
 
             const basename = path.parse(path.basename(file)).name
             console.log("开始处理：" + file)
@@ -162,7 +193,10 @@ async function main() {
                         orderData.piece++
 
                         const splitCode = `${code}-${orderData.piece}`
-                        const outputFile = path.join(outputFolderPath, `${splitCode}.png`)
+                        // const outputFile = path.join(outputFolderPath, `${splitCode}.png`)
+                        const taskId = `QHSTJ${year.toString().substring(2)}${month}${day}-${currentTaskNumber}`
+                        currentTaskNumber++
+                        const outputFile = path.join(outputFolderPath, `${taskId}.png`)
                         if (!fs.existsSync(outputFile)) {
                             const width = bound.right - bound.left// Math.floor(metadata.width / 5)
                             await sharp(imageBuffer).extract({ left: bound.left, top: 0, width, height: metadata.height })
@@ -225,7 +259,7 @@ async function main() {
 
     for (let i = 0; i < orderList.length; i++) {
         const row = orderList[i]
-        row[2] = `QHSTJ${year.toString().substring(2)}${month}${day}-${i + 8001}`
+        row[2] = `QHSTJ${year.toString().substring(2)}${month}${day}-${i + startTaskNumber}`
     }
 
     const workbook = xlsx.utils.book_new();
@@ -294,6 +328,7 @@ function generateBarcode(code, messages, filename) {
                     // Save the final image as a PNG file
                     canvas.write(filename, (saveErr) => {
                         if (saveErr) console.log("条码生成出错: " + code);
+                        createBarcodePDF(filename, filename.replace('条码', '').replace('.png', '.pdf'))
                     });
                 });
             })
