@@ -2,8 +2,8 @@
   "name": "zestimage",
   "description": "xls split png",
   "copyright": "Copyright ©Zesty 2023",
-  "main": "genpdf.js",
-  "bin": "genpdf.js",
+  "main": "mergexls.js",
+  "bin": "mergexls.js",
   "pkg": {
     "targets": [
       "node18-win-x64"
@@ -15,12 +15,14 @@
     "outputPath": "dist"
   },
   "scripts": {
-    "pkg": "pkg . --output dist/ZestImage2.exe --compress GZip"
+    "pkg": "pkg . --output dist/mergexls.exe --compress GZip"
   },
   "dependencies": {
     "axios": "0.27.2",
     "bwip-js": "^4.0.0",
+    "java-properties": "^1.0.2",
     "jimp": "^0.22.10",
+    "mysql": "^2.18.1",
     "pdf-lib": "^1.17.1",
     "progress": "^2.0.3",
     "rcedit": "^3.1.0",
