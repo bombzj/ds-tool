@@ -2,8 +2,8 @@
   "name": "zestimage",
   "description": "xls split png",
   "copyright": "Copyright ©Zesty 2023",
-  "main": "genpdf.js",
-  "bin": "genpdf.js",
+  "main": "genpdf2.js",
+  "bin": "genpdf2.js",
   "pkg": {
     "targets": [
       "node18-win-x64"
@@ -15,7 +15,7 @@
     "outputPath": "dist"
   },
   "scripts": {
-    "pkg": "pkg . --output dist/ZestImage2.exe --compress GZip"
+    "pkg": "pkg . --output dist/ZestImage3.exe --compress GZip"
   },
   "dependencies": {
     "axios": "0.27.2",
