@@ -50,8 +50,7 @@ let font, font2
 async function main() {
     font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK)
     font2 = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK)
-    const orderList = []
-    let lastSplitTask
+
     for (let file of files) {
         if (path.extname(file) === '.xlsx' && !path.basename(file).startsWith("~")) {
             const workbook = xlsx.readFile(path.join(inputFolderPath, file));
@@ -76,11 +75,34 @@ async function main() {
             if (!fs.existsSync(outputFolderOriginal)) {
                 fs.mkdirSync(outputFolderOriginal);
             }
-
-            const orderMap = new Map()  // 原始图片
-
+            // check all rows, if pcs > 1, split this row into pcs rows, new rows added after original row
             for (let i = 0; i < rows.length; i++) {
                 const [orderNumber, sku, color, pcs, code, imageUrl] = rows[i];
+                if (parseInt(pcs) > 1) {
+                    for (let j = 1; j < parseInt(pcs); j++) {
+                        rows.splice(i + j, 0, [orderNumber, sku, color, 1, code, imageUrl])
+                    }
+                    rows[i][3] = 1
+                }
+            }
+
+            const orderMap = new Map()  // set total pcs of each orderNumber in rows
+            for (let i = 0; i < rows.length; i++) {
+                const [orderNumber, sku, color, pcs, code, imageUrl] = rows[i];
+                if (orderMap.has(orderNumber)) {
+                    const n = orderMap.get(orderNumber) + 1
+                    orderMap.set(orderNumber, n)
+                    rows[i][0] += `-${n}`
+                } else {
+                    orderMap.set(orderNumber, 1)
+                }
+            }
+            for (let i = 0; i < rows.length; i++) {
+                rows[i][6] = orderMap.get(rows[i][0])
+            }
+
+            for (let i = 0; i < rows.length; i++) {
+                const [orderNumber, sku, color, pcs, code, imageUrl, total] = rows[i];
                 if (imageUrl === undefined || !imageUrl.startsWith("http")) continue
                 
                 const ext = imageUrl.split('.').pop().split('?')[0];
@@ -129,8 +151,7 @@ async function main() {
                     const imageBuffer = data;
                     if (!cached)
                         fs.writeFileSync(oriFile, imageBuffer);
-                    await generateBarcode(code, [orderNumber, `Total: ${pcs} pcs`, currentDate.toLocaleString()], path.join(outputFolderPath, orderNumber), oriFile)
-                    return 1
+                    return await generateBarcode(code, [orderNumber, `Total: ${total} pcs`, currentDate.toLocaleString()], path.join(outputFolderPath, orderNumber), oriFile)
                 }
 
                 let result = 0
@@ -153,19 +174,27 @@ async function main() {
                     }
                 }
             }
+            console.log("文件处理完成：" + file)
         }
     }
+    console.log("全部文件处理完成")
 }
 
 
 
 function generateBarcode(code, messages, filename, imageFile) {
     return new Promise((resolve, reject) => {
+        // if image already exists, then return
+        if (fs.existsSync(filename + ".png")) {
+            resolve(1)
+            return
+        }
+
 
         const barcodeOptions = {
             bcid: 'code128', // Barcode type
             text: code, // Text to encode
-            scale: 3, // Barcode scaling factor
+            scale: 4, // Barcode scaling factor
             height: 10, // Barcode height, in pixels
             includetext: true, // Show human-readable text below the barcode
         };
@@ -178,7 +207,7 @@ function generateBarcode(code, messages, filename, imageFile) {
             Jimp.read(png)
                 .then(barcodeImage => {
                     // Resize the barcode image to fit within the canvas
-                    // barcodeImage.resize(600, 120);
+                    // barcodeImage.resize(700, 150);
 
                     // Create a blank canvas with size 800x800
                     new Jimp(800, 800, "#FFFFFF", (backgroundColorErr, canvas) => {
@@ -188,7 +217,7 @@ function generateBarcode(code, messages, filename, imageFile) {
                         const x = (canvas.bitmap.width - barcodeImage.bitmap.width) / 2;
                         const y = (canvas.bitmap.height - barcodeImage.bitmap.height) / 3;
 
-                        canvas.composite(barcodeImage, x, y + 200);
+                        canvas.composite(barcodeImage, x, y + 170);
 
                         // Add the number "15" at the bottom of the canvas
                         let nex = 50;
@@ -210,11 +239,13 @@ function generateBarcode(code, messages, filename, imageFile) {
                             });
                         }).catch(e => {
                             console.log("图片加载失败：" + imageFile)
+                            resolve(-2)
                         })
                     });
                 })
                 .catch(barcodeImageErr => {
                     console.error(barcodeImageErr);
+                    resolve(-2)
                 });
         });
 
