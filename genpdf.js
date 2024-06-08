@@ -28,6 +28,8 @@ async function createBarcodePDF(barcodeImagePath, outputFilePath) {
 
     const pdfBytes = await pdfDoc.save();
     fs.writeFileSync(outputFilePath, pdfBytes);
+    // remove file at barcodeImagePath
+    fs.rmSync(barcodeImagePath)
 }
 
 const inputFolderPath = './';
@@ -60,7 +62,7 @@ async function main() {
             console.log("开始处理：" + file)
 
             const outputFolderPath = './' + basename;
-            const outputFolderOriginal = outputFolderPath + "原始图"
+            const outputFolderOriginal = outputFolderPath   //  + "原始图"
             // Create the output folder if it doesn't exist
             if (!fs.existsSync(outputFolderPath)) {
                 fs.mkdirSync(outputFolderPath);
@@ -223,9 +225,9 @@ function generateBarcode(code, messages, filename) {
                         canvas.print(font, 300, 60, messages[3]);
 
                         // Save the final image as a PNG file
-                        canvas.write(filename + ".png", (saveErr) => {
+                        canvas.write(filename + ".png", async (saveErr) => {
                             if (saveErr) console.log("条码生成出错: " + code);
-                            createBarcodePDF(filename + ".png", filename.replace('条码', '') + '.pdf')
+                            await createBarcodePDF(filename + ".png", filename.replace('条码', '') + '.pdf')
                             resolve(1)
                         });
                     });
