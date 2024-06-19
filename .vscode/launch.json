@@ -11,8 +11,38 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "cwd": "${workspaceFolder}\\dist",
+            "cwd": "${workspaceFolder}\\dist2",
             "program": "${workspaceFolder}\\genpdf.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "readProperties",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "cwd": "${workspaceFolder}\\dist",
+            "program": "${workspaceFolder}\\readProperties.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "run current",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "cwd": "${workspaceFolder}\\dist",
+            "program": "${file}"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "mergexls",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "cwd": "${workspaceFolder}\\dist",
+            "program": "${workspaceFolder}\\mergexls.js"
         }
     ]
 }
