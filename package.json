@@ -15,7 +15,7 @@
     "outputPath": "dist"
   },
   "scripts": {
-    "pkg": "pkg . --output dist/数字序列.exe --compress GZip"
+    "pkg": "pkg . --output dist/吉客云.exe --compress GZip"
   },
   "dependencies": {
     "axios": "0.27.2",
@@ -25,6 +25,7 @@
     "progress": "^2.0.3",
     "rcedit": "^3.1.0",
     "sharp": "^0.32.4",
+    "uuid": "^10.0.0",
     "xlsx": "^0.18.5"
   }
 }
