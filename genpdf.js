@@ -112,6 +112,9 @@ async function main() {
                 if (imageUrl === undefined || !imageUrl.startsWith("http")) continue
                 
                 const ext = imageUrl.split('.').pop().split('?')[0];
+                if(convertExt == undefined || convertExt == "") {
+                    convertExt = ext
+                }
                 const goodsSerial = `${basename}-${fileId}`
                 const productPath = path.join(outputFolderOriginal, productName)
                 if (!fs.existsSync(productPath)) {
