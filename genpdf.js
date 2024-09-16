@@ -120,7 +120,6 @@ async function main() {
                 if (!fs.existsSync(productPath)) {
                     fs.mkdirSync(productPath);
                 }
-                const oriFile = path.join(outputFolderOriginal, productName, `${goodsSerial}.${convertExt}`)  // 原始图保存文件
 
                 const downloadImage = async (url, retry = 5) => {
                     for (let i = 0; i < retry; i++) {
@@ -175,8 +174,10 @@ async function main() {
                 orderData.piece++
 
                 const splitCode = total == 1 ? code : `${code}-${orderData.piece}`
+                // const oriFile = path.join(outputFolderOriginal, productName, `${goodsSerial}.${convertExt}`)
+                const oriFile = path.join(outputFolderOriginal, productName, `${splitCode}.${convertExt}`)     // 原始图保存文件
 
-                const splitImage = async (data, cached = false) => {
+                const saveImageBarcode = async (data, cached = false) => {
                     const imageBuffer = data;
                     if (!cached)
                         fs.writeFileSync(oriFile, imageBuffer);
@@ -187,7 +188,7 @@ async function main() {
                 if (fs.existsSync(oriFile)) {
                     console.log("从缓存读取：" + orderNumber)
                     console.log(`开始生成pdf ${orderNumber}`)
-                    result = await splitImage(fs.readFileSync(oriFile), true)
+                    result = await saveImageBarcode(fs.readFileSync(oriFile), true)
                     if(result == -2) {
                         console.log("图片已损坏，重新开始下载")
                     }
@@ -198,10 +199,10 @@ async function main() {
                         console.log(`开始生成pdf ${orderNumber}`)
                         if(ext != convertExt) {
                             const image = await sharp(data).toFormat(convertExt).toBuffer()
-                            result = await splitImage(image)
+                            result = await saveImageBarcode(image)
                         }
                         else
-                            result = await splitImage(data)
+                            result = await saveImageBarcode(data)
                         if(result == -2) {
                             console.log("下载的图片已损坏")
                         }
