@@ -46,6 +46,7 @@ const year = currentDate.getFullYear();
 const month = String(currentDate.getMonth() + 1).padStart(2, '0');
 const day = String(currentDate.getDate()).padStart(2, '0');
 let font, font2
+const urlDownloadCache = new Map()
 
 async function main() {
     font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK)
@@ -232,9 +233,13 @@ async function main() {
                         // const outputFile = path.join(outputFolderPath, `${taskId}.png`)
                         const outputFile = path.join(outputFolderPath2, `${splitCode}.png`)
                         if (!fs.existsSync(outputFile)) {
-                            const width = bound.right - bound.left// Math.floor(metadata.width / 5)
-                            await sharp(imageBuffer).extract({ left: bound.left, top: 0, width, height: metadata.height })
-                                .toFile(outputFile);
+                            if(bound.left == 0 && bound.right == metadata.width) {
+                                fs.copyFileSync(oriFile, outputFile)
+                            } else {
+                                const width = bound.right - bound.left// Math.floor(metadata.width / 5)
+                                await sharp(imageBuffer).extract({ left: bound.left, top: 0, width, height: metadata.height })
+                                    .toFile(outputFile);
+                            }
                         }
                         const orderDetail = [
                             code, orderNumber, , 5004
@@ -248,6 +253,10 @@ async function main() {
                 }
 
                 let result = 0
+                if(urlDownloadCache.has(imageUrl)) {
+                    const copyFromFile = urlDownloadCache.get(imageUrl)
+                    fs.copyFileSync(copyFromFile, oriFile)
+                }
                 if (fs.existsSync(oriFile)) {
                     console.log("从缓存读取：" + code)
                     console.log(`开始切分图片 ${sku}`)
@@ -267,6 +276,8 @@ async function main() {
                         result = await splitImage(data)
                         if(result == -2) {
                             console.log("下载的图片已损坏")
+                        } else {
+                            urlDownloadCache.set(imageUrl, oriFile)
                         }
                     }
                         // lastSplitTask = splitImage(data)    // split and continue to download next
