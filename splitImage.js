@@ -79,10 +79,21 @@ async function main() {
 
             const orderMap = new Map()  // 原始图片
 
+            // replicate by quantity
             for (let i = 0; i < rows.length; i++) {
-                const [orderNumber, sku, code, imageUrl] = rows[i];
+                const [orderNumber, sku, code, imageUrl, productName, quantity] = rows[i];
+                if(quantity && quantity > 1) {
+                    for(let j = 1;j < quantity;j++) {
+                        rows.push([orderNumber, sku, code, imageUrl, productName, 1])
+                    }
+                    rows[i][5] = 1
+                }
+            }
+
+            for (let i = 0; i < rows.length; i++) {
+                const [orderNumber, sku, code, imageUrl, productName, quantity] = rows[i];
                 if (imageUrl === undefined || !imageUrl.startsWith("http")) continue
-                let n = 1;
+                let n = 1;  // like -5P
                 const regex = /-(\d+)P$/;
                 const match = sku.match(regex);
                 if (match) {
@@ -101,6 +112,10 @@ async function main() {
                     orderMap.set(code, orderData)
                 }
                 const oriFile = path.join(outputFolderOriginal, `${code}-${orderData.number}.png`)  // 原始图保存文件
+                    
+                const outputFolderPath2 = path.join(outputFolderPath, productName)
+                if(!fs.existsSync(outputFolderPath2))
+                    fs.mkdirSync(outputFolderPath2)
 
                 const downloadImage = async (url, retry = 5) => {
                     for (let i = 0; i < retry; i++) {
@@ -158,32 +173,50 @@ async function main() {
 
                     const pixelArray = new Uint8ClampedArray(info.data.buffer);
                     const boundingList = []
-                    let bounding = {
-                        left: -1
-                    }
-                    const baseline = (metadata.width * Math.floor(metadata.height / 2)) << 2
-                    for (let i = 0; i < metadata.width; i++) {
-                        let transparent = pixelArray[baseline + i * 4 + 3] == 0
-                        if (bounding.left == -1) {
-                            if (!transparent) {
-                                bounding.left = i
+                    if(quantity) {  // split equally, productName ends with "5等分", get the number before "等分"
+                        let splitNumber = 1;
+                        try {
+                            splitNumber = parseInt(productName.match(/(\d+)等分$/)[1])
+                        } catch(e) {}
+                        if(splitNumber < n) {
+                            console.log(`订单要求${n}份，但是商品名称中写的是${splitNumber}等分`)
+                        }
+                        const width = Math.floor(metadata.width / splitNumber)
+                        for(let i = 0;i < n && i < splitNumber;i++) {
+                            let bounding = {
+                                left: i * width,
+                                right: (i + 1) * width
                             }
-                        } else {
-                            if (transparent) {
-                                bounding.right = i
-                                boundingList.push(bounding)
-                                bounding = {
-                                    left: -1
+                            boundingList.push(bounding)
+                        }
+                    } else {    // detect bounding
+                        let bounding = {
+                            left: -1
+                        }
+                        const baseline = (metadata.width * Math.floor(metadata.height / 2)) << 2
+                        for (let i = 0; i < metadata.width; i++) {
+                            let transparent = pixelArray[baseline + i * 4 + 3] == 0
+                            if (bounding.left == -1) {
+                                if (!transparent) {
+                                    bounding.left = i
+                                }
+                            } else {
+                                if (transparent) {
+                                    bounding.right = i
+                                    boundingList.push(bounding)
+                                    bounding = {
+                                        left: -1
+                                    }
                                 }
                             }
                         }
-                    }
-                    if (bounding.left != -1) {
-                        bounding.right = metadata.width
-                        boundingList.push(bounding)
-                    }
-                    if(boundingList.length != n){
-                        console.log(`识别到${boundingList.length}个图片，与订单要求的${n}不一致`)
+                        if (bounding.left != -1) {
+                            bounding.right = metadata.width
+                            boundingList.push(bounding)
+                        }
+                        if(boundingList.length != n){
+                            console.log(`识别到${boundingList.length}个图片，与订单要求的${n}不一致`)
+                        }
                     }
 
                     for (let i = 0; i < boundingList.length; i++) {
@@ -196,7 +229,8 @@ async function main() {
                         // const outputFile = path.join(outputFolderPath, `${splitCode}.png`)
                         const taskId = `QHSTJ${year.toString().substring(2)}${month}${day}-${currentTaskNumber}`
                         currentTaskNumber++
-                        const outputFile = path.join(outputFolderPath, `${taskId}.png`)
+                        // const outputFile = path.join(outputFolderPath, `${taskId}.png`)
+                        const outputFile = path.join(outputFolderPath2, `${splitCode}.png`)
                         if (!fs.existsSync(outputFile)) {
                             const width = bound.right - bound.left// Math.floor(metadata.width / 5)
                             await sharp(imageBuffer).extract({ left: bound.left, top: 0, width, height: metadata.height })
