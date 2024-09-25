@@ -45,6 +45,7 @@ const year = currentDate.getFullYear();
 const month = String(currentDate.getMonth() + 1).padStart(2, '0');
 const day = String(currentDate.getDate()).padStart(2, '0');
 let font, font2
+const urlDownloadCache = new Map()
 
 async function main() {
     font = await Jimp.loadFont(Jimp.FONT_SANS_64_BLACK)
@@ -69,10 +70,14 @@ async function main() {
             const outputFolderPath = '.';
             // const outputFolderPath = './' + basename;
             const outputFolderOriginal = path.join(outputFolderPath, "原图")
+            const outputFolderImage = path.join(outputFolderPath, "原始图")
             const outputPdfPath = path.join(outputFolderPath, '发货面单');
             // Create the output folder if it doesn't exist
             if (!fs.existsSync(outputFolderPath)) {
                 fs.mkdirSync(outputFolderPath);
+            }
+            if (!fs.existsSync(outputFolderImage)) {
+                fs.mkdirSync(outputFolderImage);
             }
             if (!fs.existsSync(outputFolderOriginal)) {
                 fs.mkdirSync(outputFolderOriginal);
@@ -93,6 +98,7 @@ async function main() {
 
             const orderMap = new Map()  // set total pcs of each orderNumber in rows
             const codeMap = new Map() 
+            // 拆分一行多件
             for (let i = 0; i < rows.length; i++) {
                 const [orderNumber, sku, code, imageUrl, productName, pcs, convertExt] = rows[i];
                 if (orderMap.has(orderNumber)) {
@@ -108,18 +114,23 @@ async function main() {
             }
 
             for (let i = 0; i < rows.length; i++) {
-                const [orderNumber, sku, code, imageUrl, productName, pcs, convertExt, total] = rows[i];
+                const [orderNumber, sku, code, imageUrl, productName, quantity, convertExt, total] = rows[i];
                 if (imageUrl === undefined || !imageUrl.startsWith("http")) continue
+                let n = 1;  // like -5P
+                const regex = /-(\d+)P$/;
+                const match = sku.match(regex);
+                if (match) {
+                    n = parseInt(match[1])
+                }
                 
                 const ext = imageUrl.split('.').pop().split('?')[0];
                 if(convertExt == undefined || convertExt == "") {
                     convertExt = ext
                 }
-                const goodsSerial = `${basename}-${fileId}`
-                const productPath = path.join(outputFolderOriginal, productName)
-                if (!fs.existsSync(productPath)) {
-                    fs.mkdirSync(productPath);
-                }
+                // const productPath = path.join(outputFolderOriginal, productName)
+                // if (!fs.existsSync(productPath)) {
+                //     fs.mkdirSync(productPath);
+                // }
 
                 const downloadImage = async (url, retry = 5) => {
                     for (let i = 0; i < retry; i++) {
@@ -171,24 +182,127 @@ async function main() {
                     codeMap.set(code, orderData)
                 }
 
-                orderData.piece++
+                // orderData.piece++
 
                 const splitCode = total == 1 ? code : `${code}-${orderData.piece}`
                 // const oriFile = path.join(outputFolderOriginal, productName, `${goodsSerial}.${convertExt}`)
-                const oriFile = path.join(outputFolderOriginal, productName, `${splitCode}.${convertExt}`)     // 原始图保存文件
+                const oriFile = path.join(outputFolderOriginal, `${code}-${orderData.number}.png`)  // 原始图保存文件
+                const outputFolderPath2 = path.join(outputFolderImage, productName)
+                if(!fs.existsSync(outputFolderPath2))
+                    fs.mkdirSync(outputFolderPath2)
 
-                const saveImageBarcode = async (data, cached = false) => {
+                // const saveImageBarcode = async (data, cached = false) => {
+                //     const imageBuffer = data;
+                //     if (!cached)
+                //         fs.writeFileSync(oriFile, imageBuffer);
+                //     return await generateBarcode(code, [orderNumber, `Total: ${total} pcs`, currentDate.toLocaleString(), code], path.join(outputPdfPath, code))
+                // }
+                const splitImage = async (data, cached = false) => {
                     const imageBuffer = data;
                     if (!cached)
                         fs.writeFileSync(oriFile, imageBuffer);
-                    return await generateBarcode(code, [orderNumber, `Total: ${total} pcs`, currentDate.toLocaleString(), code], path.join(outputPdfPath, code))
+                    const imageSharp = sharp(imageBuffer)
+                    let info
+                    try {
+                        info = await imageSharp
+                        .raw()
+                        .toBuffer({ resolveWithObject: true });
+                    } catch(e) {
+                        return -2
+                    }
+                    const metadata = info.info
+
+                    const pixelArray = new Uint8ClampedArray(info.data.buffer);
+                    const boundingList = []
+                    if(quantity) {  // split equally, productName ends with "5等分", get the number before "等分"
+                        let splitNumber = 1;
+                        try {
+                            splitNumber = parseInt(productName.match(/(\d+)等分$/)[1])
+                        } catch(e) {}
+                        if(splitNumber < n) {
+                            console.log(`订单要求${n}份，但是商品名称中写的是${splitNumber}等分`)
+                        }
+                        const width = Math.floor(metadata.width / splitNumber)
+                        for(let i = 0;i < n && i < splitNumber;i++) {
+                            let bounding = {
+                                left: i * width,
+                                right: (i + 1) * width
+                            }
+                            boundingList.push(bounding)
+                        }
+                    } else {    // detect bounding
+                        let bounding = {
+                            left: -1
+                        }
+                        const baseline = (metadata.width * Math.floor(metadata.height / 2)) << 2
+                        for (let i = 0; i < metadata.width; i++) {
+                            let transparent = pixelArray[baseline + i * 4 + 3] == 0
+                            if (bounding.left == -1) {
+                                if (!transparent) {
+                                    bounding.left = i
+                                }
+                            } else {
+                                if (transparent) {
+                                    bounding.right = i
+                                    boundingList.push(bounding)
+                                    bounding = {
+                                        left: -1
+                                    }
+                                }
+                            }
+                        }
+                        if (bounding.left != -1) {
+                            bounding.right = metadata.width
+                            boundingList.push(bounding)
+                        }
+                        if(boundingList.length != n){
+                            console.log(`识别到${boundingList.length}个图片，与订单要求的${n}不一致`)
+                        }
+                    }
+
+                    for (let i = 0; i < boundingList.length; i++) {
+                        let bound = boundingList[i]
+                        if (i >= n) break
+
+                        orderData.piece++
+
+                        const splitCode = `${code}-${orderData.piece}`
+                        // const outputFile = path.join(outputFolderPath, `${splitCode}.png`)
+                        // const taskId = `QHSTJ${year.toString().substring(2)}${month}${day}-${currentTaskNumber}`
+                        // currentTaskNumber++
+                        // const outputFile = path.join(outputFolderPath, `${taskId}.png`)
+                        const outputFile = path.join(outputFolderPath2, `${splitCode}.png`)
+                        if (!fs.existsSync(outputFile)) {
+                            if(bound.left == 0 && bound.right == metadata.width) {
+                                fs.copyFileSync(oriFile, outputFile)
+                            } else {
+                                const width = bound.right - bound.left// Math.floor(metadata.width / 5)
+                                await sharp(imageBuffer).extract({ left: bound.left, top: 0, width, height: metadata.height })
+                                    .toFile(outputFile);
+                            }
+                        }
+                        const goodsSerial = `${basename}-${fileId}`
+                        fileId++;
+                        const orderDetail = [
+                            code, orderNumber, goodsSerial, 10001
+                        ]
+                        orderDetail[7] = "条"
+                        orderDetail[15] = productName
+                        orderDetail[16] = splitCode
+                        orderList.push(orderDetail)
+                    }
+                    return 1
                 }
 
                 let result = 0
+                if(urlDownloadCache.has(imageUrl)) {
+                    const copyFromFile = urlDownloadCache.get(imageUrl)
+                    fs.copyFileSync(copyFromFile, oriFile)
+                }
                 if (fs.existsSync(oriFile)) {
                     console.log("从缓存读取：" + orderNumber)
                     console.log(`开始生成pdf ${orderNumber}`)
-                    result = await saveImageBarcode(fs.readFileSync(oriFile), true)
+                    result = await splitImage(fs.readFileSync(oriFile), true)
                     if(result == -2) {
                         console.log("图片已损坏，重新开始下载")
                     }
@@ -199,24 +313,30 @@ async function main() {
                         console.log(`开始生成pdf ${orderNumber}`)
                         if(ext != convertExt) {
                             const image = await sharp(data).toFormat(convertExt).toBuffer()
-                            result = await saveImageBarcode(image)
+                            result = await splitImage(image)
                         }
                         else
-                            result = await saveImageBarcode(data)
+                            result = await splitImage(data)
                         if(result == -2) {
                             console.log("下载的图片已损坏")
+                        } else {
+                            urlDownloadCache.set(imageUrl, oriFile)
                         }
                     }
                 }
 
-                const orderDetail = [
-                    code, orderNumber, goodsSerial, 10001
-                ]
-                orderDetail[7] = "条"
-                orderDetail[15] = productName
-                orderDetail[16] = splitCode
-                orderList.push(orderDetail)
-                fileId++;
+                // const orderDetail = [
+                //     code, orderNumber, goodsSerial, 10001
+                // ]
+                // orderDetail[7] = "条"
+                // orderDetail[15] = productName
+                // orderDetail[16] = splitCode
+                // orderList.push(orderDetail)
+            }
+            console.log(`开始生成条码 ${file}`)
+            for (let order of codeMap.values()) {
+                // generateBarcode(code, [orderNumber, `Total: ${total} pcs`, currentDate.toLocaleString(), code], path.join(outputPdfPath, code))
+                await generateBarcode(order.code, [order.orderNumber, `Total: ${order.piece} pcs`, currentDate.toLocaleString(), order.code], path.join(outputPdfPath, order.code))
             }
             console.log("文件处理完成：" + file)
         }

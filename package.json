@@ -15,7 +15,7 @@
     "outputPath": "dist"
   },
   "scripts": {
-    "pkg": "pkg . --output dist/吉客云挂件.exe --compress GZip"
+    "pkg": "pkg . --output dist/吉客云切图.exe --compress GZip"
   },
   "dependencies": {
     "axios": "0.27.2",
