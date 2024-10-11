@@ -76,6 +76,7 @@ async function main() {
             if (!fs.existsSync(outputFolderOriginal)) {
                 fs.mkdirSync(outputFolderOriginal);
             }
+
             // check all rows, if pcs > 1, split this row into pcs rows, new rows added after original row
             for (let i = 0; i < rows.length; i++) {
                 const [orderNumber, sku, color, pcs, code, imageUrl] = rows[i];
@@ -105,9 +106,14 @@ async function main() {
             for (let i = 0; i < rows.length; i++) {
                 const [orderNumber, sku, color, pcs, code, imageUrl, total] = rows[i];
                 if (imageUrl === undefined || !imageUrl.startsWith("http")) continue
+
+                const outputFolderSub = path.join(outputFolderPath, color)
+                if (!fs.existsSync(outputFolderSub)) {
+                    fs.mkdirSync(outputFolderSub);
+                }
                 
                 const ext = imageUrl.split('.').pop().split('?')[0];
-                const oriFile = path.join(outputFolderOriginal, `${orderNumber}-${color}.${ext}`)  // 原始图保存文件
+                const oriFile = path.join(outputFolderSub, `${orderNumber}-${color}.${ext}`)  // 原始图保存文件
 
                 const downloadImage = async (url, retry = 5) => {
                     for (let i = 0; i < retry; i++) {
@@ -152,7 +158,7 @@ async function main() {
                     const imageBuffer = data;
                     if (!cached)
                         fs.writeFileSync(oriFile, imageBuffer);
-                    return await generateBarcode(code, [orderNumber, `Total: ${total} pcs`, currentDate.toLocaleString()], path.join(outputFolderPath, orderNumber), oriFile)
+                    return await generateBarcode(code, [orderNumber, `Total: ${total} pcs`, currentDate.toLocaleString()], path.join(outputFolderSub, orderNumber), oriFile)
                 }
 
                 let result = 0
@@ -195,7 +201,7 @@ function generateBarcode(code, messages, filename, imageFile) {
         const barcodeOptions = {
             bcid: 'code128', // Barcode type
             text: code, // Text to encode
-            scale: 4, // Barcode scaling factor
+            scale: 3, // Barcode scaling factor
             height: 10, // Barcode height, in pixels
             includetext: true, // Show human-readable text below the barcode
         };
@@ -218,19 +224,19 @@ function generateBarcode(code, messages, filename, imageFile) {
                         const x = (canvas.bitmap.width - barcodeImage.bitmap.width) / 2;
                         const y = (canvas.bitmap.height - barcodeImage.bitmap.height) / 3;
 
-                        canvas.composite(barcodeImage, x, y + 170);
+                        canvas.composite(barcodeImage, x, y + 300);
 
                         // Add the number "15" at the bottom of the canvas
                         let nex = 50;
 
-                        canvas.print(font, 100, 500 + nex, messages[0]);
-                        canvas.print(font, 100, 580 + nex, messages[1]);
-                        canvas.print(font2, 100, 660 + nex, messages[2]);
+                        canvas.print(font, 100, 580 + nex, messages[0]);
+                        canvas.print(font2, 100, 640 + nex, messages[1]);
+                        canvas.print(font2, 100, 680 + nex, messages[2]);
 
                         // add imageFile at the top of the canvas
                         Jimp.read(imageFile).then(image => {
-                            image.resize(700, 340)
-                            canvas.composite(image, 50, 50)
+                            image.resize(700, 500)
+                            canvas.composite(image, 50, 40)
 
                             // Save the final image as a PNG file
                             canvas.write(filename + ".png", async (saveErr) => {
