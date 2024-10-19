@@ -41,7 +41,7 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "cwd": "${workspaceFolder}\\dist",
+            "cwd": "${workspaceFolder}\\dist\\mapxls",
             "program": "${workspaceFolder}\\mergexls.js"
         }
     ]
