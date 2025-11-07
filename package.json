@@ -1,7 +1,7 @@
 {
-  "name": "zestimage",
-  "description": "xls split png",
-  "copyright": "Copyright ©Zesty 2023",
+  "name": "mergexls",
+  "description": "merge all files in a folder",
+  "copyright": "Copyright ©Zesty 2025",
   "main": "mergexls.js",
   "bin": "mergexls.js",
   "pkg": {

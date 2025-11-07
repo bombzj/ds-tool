@@ -21,6 +21,7 @@ async function doit() {
                 continue;
             }
             const workbook = xlsx.readFile(path.join(folderName, files[j]));
+            filename = path.basename(files[j], '.xlsx');
             for(let sheet = 0; sheet < workbook.SheetNames.length; sheet++) {
                 const worksheet = workbook.Sheets[workbook.SheetNames[sheet]];
                 const data = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
@@ -31,6 +32,11 @@ async function doit() {
                     }
                     let row = {};
                     for(let l = 0; l < columnPos.length; l++) {
+                        // if pos == 0 means filename without extension
+                        if(columnPos[l] === 0) {
+                            row[columnName[l]] = filename;
+                            continue;
+                        }
                         row[columnName[l]] = data[k][columnPos[l] - 1];
                     }
                     result.push(row);
